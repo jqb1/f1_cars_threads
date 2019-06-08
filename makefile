@@ -1,2 +1,2 @@
-f1_cars2: f1_cars2.cpp
-	g++ -o f1_cars2 f1_cars2.cpp -lncurses -pthread -g
+f1_cars: f1_cars.cpp
+	g++ -o f1_cars f1_cars.cpp -lncurses -pthread -g
