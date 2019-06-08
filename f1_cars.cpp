@@ -1,5 +1,6 @@
 #include <unistd.h>
-#include<string>
+#include <string>
+#include <map>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -12,6 +13,12 @@
 #include <chrono>
 #include <utility> 
 
+enum lane{
+    left,
+    middle,
+    right,
+};
+
 struct car{
     int id; 
 
@@ -22,27 +29,23 @@ struct car{
     int speed;
     bool damaged;
 
-    enum lane{
-        left,
-        right,
-        middle
-    };
-
+    lane car_lane;
     bool in_pit_stop;
 };
 
 void wait_for_end();
+void init_track(int row, int col);
 void car_race(int row, int col);
 void draw_lanes(int maxrow, int maxcol);
 void timer_start();
-void init_car(car *, int id);
-void car_move(int maxrow, int maxcol, car *);
+car init_car(car race_car, int id);
+void car_move(int maxrow, int maxcol, car race_car);
 
 bool end_animation = false;
 std::mutex display_mutex;
 
 int CAR_NUMBER = 6;
-int lanes_rows[3] = {2,4,6};
+std::map<lane,int> lane_mapper;
 
 std::vector<std::thread> cars_vector; 
 
@@ -58,23 +61,28 @@ int main()
     std::thread t_wait(wait_for_end);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // -------initialize race------- // 
-    draw_lanes(row,col);
-    timer_start();
-   
-    car * race_car = new car; 
-    init_car(race_car, 1);
+    init_track(row,col);
 
-    std::thread car_race(car_move, row, col, race_car); 
-    std::vector<std::thread> cars_vector; 
-    int counter = 0;
+    std::vector<car> cars_vector;
+    for(int i=0; i<CAR_NUMBER;i++){
+        cars_vector.push_back(car()); 
+    }
+
+    std::vector<std::thread> cars_threads;
+    for(int i=0; i<cars_vector.size();i++){
+        cars_vector.at(i) = init_car(cars_vector.at(i), i);
+        cars_threads.push_back(std::thread(car_move, row, col, cars_vector.at(i)));
+        sleep(rand()%3+1);
+    }
+
     while(!end_animation){
        ;
     }
 
-
+    for (int i=0; i<cars_threads.size(); ++i){
+        cars_threads.at(i).join();
+    }
     t_wait.join();
-    car_race.join();
 
 //     for (int i=0; i<cars_vector.size(); ++i){
 //         cars_vector.at(i).join();
@@ -83,19 +91,31 @@ int main()
     endwin();
 } 
 
+void init_track(int row, int col){
+    draw_lanes(row,col);
+    timer_start();
+    lane_mapper[left] = 2;
+    lane_mapper[middle] = 4;
+    lane_mapper[right] = 6;
+}
+
 void wait_for_end(){
     getch();
     end_animation = true;
 }
 
-void init_car(car * race_car, int id){
-    race_car->lap = 0;
-    race_car->lap_progress = 0;
-    race_car->damaged = false;
-    race_car->fuel = 100;
-    race_car->id = id;
-    race_car->position = 0;
-    race_car->in_pit_stop = false;
+car init_car(car race_car, int id){
+    race_car.lap = 0;
+    race_car.lap_progress = 0;
+    race_car.damaged = false;
+    race_car.fuel = 100;
+    race_car.id = id;
+    race_car.position = 0;
+    race_car.in_pit_stop = false;
+    int r = std::rand()%3;
+    race_car.car_lane = (lane)r;
+
+    return race_car;
 }
 
 void draw_lanes(int maxrow,int maxcol){
@@ -134,15 +154,15 @@ void timer_start(){
 
 }
 
-void car_move(int maxrow, int maxcol, car * race_car){
-    int row = 2;
+void car_move(int maxrow, int maxcol, car race_car){
+    int row = lane_mapper[race_car.car_lane];
     int col = 5;
     while(!end_animation){
-        if(col>=maxcol)
-            col=2;
+        if(col>=maxcol-5)
+            col=5;
         
         display_mutex.lock();
-        mvprintw(row, col, "#%d#>", race_car->id);
+        mvprintw(row, col, "#%d#>", race_car.id);
         refresh();
         display_mutex.unlock();
 
