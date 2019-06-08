@@ -64,13 +64,9 @@ int main()
     init_track(row,col);
 
     std::vector<car> cars_vector;
-    for(int i=0; i<CAR_NUMBER;i++){
-        cars_vector.push_back(car()); 
-    }
-
     std::vector<std::thread> cars_threads;
-    for(int i=0; i<cars_vector.size();i++){
-        cars_vector.at(i) = init_car(cars_vector.at(i), i);
+    for(int i=0; i<CAR_NUMBER;i++){
+        cars_vector.push_back(init_car(car(), i)); 
         cars_threads.push_back(std::thread(car_move, row, col, cars_vector.at(i)));
         sleep(rand()%3+1);
     }
