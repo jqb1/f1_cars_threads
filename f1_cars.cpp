@@ -43,6 +43,10 @@ void check_if_near(car &race_car);
 car init_car(car race_car, int id);
 void car_move(int maxrow, int maxcol, int car_num);
 void display_car();
+void printw_car(car &race_car,int maxcol);
+void go_to_pitstop(car &race_car);
+
+void pit_stop(car);
 
 bool end_animation = false;
 std::mutex display_mutex;
@@ -153,38 +157,59 @@ void car_move(int maxrow, int maxcol, int car_num){
     while(!end_animation){
         cars_vector[car_num].row = lane_mapper[cars_vector[car_num].car_lane];
 
-        display_mutex.lock();
-        mvprintw(cars_vector[car_num].row, cars_vector[car_num].col, "[%d]>", cars_vector[car_num].id);
-        refresh();
-        display_mutex.unlock();
+        printw_car(cars_vector[car_num], maxcol);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(200/cars_vector[car_num].speed));
-
-        display_mutex.lock();
-        mvprintw(cars_vector[car_num].row, cars_vector[car_num].col, " ");
-        display_mutex.unlock();
-
-        cars_vector[car_num].col++;
         check_if_near(cars_vector[car_num]);
+
         if(cars_vector[car_num].fuel>0 && cars_vector[car_num].col%5==0)
             cars_vector[car_num].fuel -= std::rand()%2;
         
-        if(cars_vector[car_num].col>=maxcol-9){
-            cars_vector[car_num].lap+=1;
-            cars_vector[car_num].col=5;
-            display_mutex.lock();
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            mvprintw(cars_vector[car_num].row, maxcol-9, "    ");
-            display_mutex.unlock();
-        }
-
         display_results(maxrow,maxcol,cars_vector[car_num]);
 
     }
 }
+void printw_car(car &race_car, int maxcol){
+    display_mutex.lock();
+    mvprintw(race_car.row, race_car.col, "[%d]>",race_car.id);
+    refresh();
+    display_mutex.unlock();
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(200/race_car.speed));
+
+    display_mutex.lock();
+    mvprintw(race_car.row, race_car.col, " ");
+    display_mutex.unlock();
+
+    race_car.col++;
+
+    if(race_car.col>=maxcol-9){
+        race_car.lap+=1;
+        race_car.col=5;
+        display_mutex.lock();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        mvprintw(race_car.row, maxcol-9, "    ");
+        display_mutex.unlock();
+    }
+}
+
+void check_if_near(car &race_car){
+    lane car_lane = race_car.car_lane;
+    int col = race_car.col;
+    for(int i=0; i<cars_vector.size(); i++){
+        if(col+3==cars_vector.at(i).col && car_lane==cars_vector.at(i).car_lane && cars_vector.at(i).id!=race_car.id && race_car.speed>cars_vector.at(i).speed){
+            int r=rand()%3;
+            race_car.car_lane = (lane)r;
+            display_mutex.lock();
+            mvprintw(race_car.row, race_car.col, "     ");
+            display_mutex.unlock();
+        }
+    }
+}
+void go_to_pitstop(car &race_car){
+
+}
 void display_results(int maxrow, int maxcol,car race_car){
-    // *id to set up position for every car 
+    // multiple by id to set up position of print
     int print_row = maxrow/2+3*race_car.id;
     display_mutex.lock();
     mvprintw(print_row,0, "Lap:    ", race_car.lap);
@@ -198,20 +223,7 @@ void display_results(int maxrow, int maxcol,car race_car){
     display_mutex.unlock();
 
 }
-void check_if_near(car &race_car){
-    lane car_lane = race_car.car_lane;
-    int col = race_car.col;
-    for(int i=0; i<cars_vector.size(); i++){
-        if(col+3==cars_vector.at(i).col && car_lane==cars_vector.at(i).car_lane && cars_vector.at(i).id!=race_car.id && race_car.speed>cars_vector.at(i).speed){
-            int r=rand()%3;
-            race_car.car_lane = (lane)r;
-            display_mutex.lock();
-            mvprintw(race_car.row, race_car.col, "     ");
-            display_mutex.unlock();
 
-        }
-    }
-}
 void display_car(){
     while(!end_animation){
         display_mutex.lock();
