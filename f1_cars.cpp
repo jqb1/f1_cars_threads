@@ -12,6 +12,7 @@
 #include <vector>
 #include <chrono>
 #include <utility> 
+#include <condition_variable>
 
 enum lane{
     left,
@@ -45,9 +46,13 @@ void display_car();
 
 bool end_animation = false;
 std::mutex display_mutex;
+
 int CAR_NUMBER = 6;
 std::map<lane,int> lane_mapper;
 std::vector<car> cars_vector;
+
+std::mutex end_mutex;
+std::condition_variable end_condition;
 
 int main()
 {
@@ -63,12 +68,14 @@ int main()
 
     std::vector<std::thread> cars_threads;
     for(int i=0; i<CAR_NUMBER; i++){
+        if(end_animation)break;
         cars_vector.push_back(init_car(car(), i)); 
         cars_threads.push_back(std::thread(car_move, row, col, i));
         sleep(rand()%3+1);
     }
     
-    while(!end_animation){};
+    std::unique_lock<std::mutex> lock(end_mutex);
+    end_condition.wait(lock,[]{return end_animation;});
 
     for (int i=0; i<cars_threads.size(); ++i){
         cars_threads.at(i).join();
@@ -88,6 +95,8 @@ void init_track(int row, int col){
 void wait_for_end(){
     getch();
     end_animation = true;
+
+    end_condition.notify_one();
 }
 
 car init_car(car race_car, int id){
