@@ -12,6 +12,7 @@
 #include <vector>
 #include <chrono>
 #include <utility> 
+#include <queue>
 #include <condition_variable>
 
 enum lane{
@@ -44,19 +45,26 @@ car init_car(car race_car, int id);
 void car_move(int maxrow, int maxcol, int car_num);
 void display_car();
 void printw_car(car &race_car,int maxcol);
-void go_to_pitstop(car &race_car);
+void go_to_pitstop(car race_car);
+void tank_car(car &race_car, int maxrow);
 
-void pit_stop(car);
+void pit_stop(int maxrow, int maxcol);
 
 bool end_animation = false;
 std::mutex display_mutex;
 
-int CAR_NUMBER = 6;
+int CAR_NUMBER = 1;
 std::map<lane,int> lane_mapper;
 std::vector<car> cars_vector;
 
 std::mutex end_mutex;
 std::condition_variable end_condition;
+
+std::condition_variable added_to_queue;
+std::condition_variable leaved_pit_stop;
+
+std::queue<car> waiting_cars;
+std::mutex car_queue_mutex;
 
 int main()
 {
@@ -69,6 +77,7 @@ int main()
     std::thread t_wait(wait_for_end);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     init_track(row,col);
+    std::thread pit_stop_service(pit_stop,row,col);
 
     std::vector<std::thread> cars_threads;
     for(int i=0; i<CAR_NUMBER; i++){
@@ -85,6 +94,7 @@ int main()
         cars_threads.at(i).join();
     }
     t_wait.join();
+    pit_stop_service.join();
     endwin();
 } 
 
@@ -157,13 +167,27 @@ void car_move(int maxrow, int maxcol, int car_num){
     while(!end_animation){
         cars_vector[car_num].row = lane_mapper[cars_vector[car_num].car_lane];
 
-        printw_car(cars_vector[car_num], maxcol);
+        if(!cars_vector[car_num].in_pit_stop){
+            printw_car(cars_vector[car_num], maxcol);
+        }
+
+        else if(cars_vector[car_num].in_pit_stop){
+            display_mutex.lock();
+            mvprintw(cars_vector[car_num].row, cars_vector[car_num].col , "        ");
+            mvprintw(14, maxcol/2, "[%d]>", car_num);
+            refresh();
+            display_mutex.unlock();
+        }
 
         check_if_near(cars_vector[car_num]);
 
         if(cars_vector[car_num].fuel>0 && cars_vector[car_num].col%5==0)
             cars_vector[car_num].fuel -= std::rand()%2;
         
+        if(cars_vector[car_num].fuel<=10){
+            go_to_pitstop(cars_vector[car_num]);
+        }
+
         display_results(maxrow,maxcol,cars_vector[car_num]);
 
     }
@@ -205,9 +229,43 @@ void check_if_near(car &race_car){
         }
     }
 }
-void go_to_pitstop(car &race_car){
+void go_to_pitstop(car race_car){    
+    std::unique_lock<std::mutex>queue_lock(car_queue_mutex);
+    waiting_cars.push(race_car);
+    queue_lock.unlock();
+    added_to_queue.notify_one();
+}
+
+void pit_stop(int maxrow, int maxcol){
+    while(!end_animation){
+        std::unique_lock<std::mutex>queue_lock(car_queue_mutex);
+        added_to_queue.wait(queue_lock, []{return !waiting_cars.empty();});
+        car race_car = waiting_cars.front();
+        waiting_cars.pop();
+        cars_vector[race_car.id].in_pit_stop = true;
+        tank_car(cars_vector[race_car.id],maxrow);
+        queue_lock.unlock();
+        cars_vector[race_car.id].in_pit_stop = false;
+
+        display_mutex.lock();
+        mvprintw(14, maxcol/2, "[___]");
+        refresh();
+        display_mutex.unlock();
+    }
 
 }
+void tank_car(car &race_car, int maxrow){
+    while(race_car.fuel<100){
+        race_car.fuel += rand()%3;
+        int print_row = maxrow/2+3*race_car.id;
+        display_mutex.lock();
+        mvprintw(print_row,20, "Fuel: %d",  race_car.fuel);
+        refresh();
+        display_mutex.unlock();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+}
+
 void display_results(int maxrow, int maxcol,car race_car){
     // multiple by id to set up position of print
     int print_row = maxrow/2+3*race_car.id;
