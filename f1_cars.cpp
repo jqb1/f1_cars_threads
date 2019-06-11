@@ -53,7 +53,7 @@ void pit_stop(int maxrow, int maxcol);
 bool end_animation = false;
 std::mutex display_mutex;
 
-int CAR_NUMBER = 1;
+int CAR_NUMBER = 6;
 std::map<lane,int> lane_mapper;
 std::vector<car> cars_vector;
 
